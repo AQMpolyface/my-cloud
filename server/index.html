@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>File Upload System</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                max-width: 800px;
+                margin: 20px auto;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }
+            .upload-container {
+                background-color: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                margin-bottom: 20px;
+            }
+            .file-list {
+                background-color: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+            .file-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 10px;
+                border-bottom: 1px solid #eee;
+            }
+            .file-item:last-child {
+                border-bottom: none;
+            }
+            button {
+                background-color: #4caf50;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+            button:hover {
+                background-color: #45a049;
+            }
+            .download-link {
+                color: #2196f3;
+                text-decoration: none;
+            }
+            .download-link:hover {
+                text-decoration: underline;
+            }
+            #uploadStatus {
+                margin-top: 10px;
+                padding: 10px;
+                border-radius: 4px;
+            }
+            .success {
+                background-color: #dff0d8;
+                color: #3c763d;
+            }
+            .error {
+                background-color: #f2dede;
+                color: #a94442;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="upload-container">
+            <h2>Upload File</h2>
+            <form id="uploadForm">
+                <input type="file" id="fileInput" required />
+                <button type="submit">Upload</button>
+            </form>
+            <div id="uploadStatus"></div>
+        </div>
+
+        <div class="file-list">
+            <h2>Available Files</h2>
+            <div id="fileList"></div>
+        </div>
+
+        <script>
+            // Function to load the file list
+            async function loadFiles() {
+                try {
+                    const response = await fetch("/api/files");
+                    const files = await response.json();
+                    const fileList = document.getElementById("fileList");
+
+                    fileList.innerHTML = "";
+                    files.forEach((file) => {
+                        const div = document.createElement("div");
+                        div.className = "file-item";
+
+                        // Create file name span
+                        const nameSpan = document.createElement("span");
+                        nameSpan.textContent = file.name;
+
+                        // Create download link
+                        const downloadLink = document.createElement("a");
+                        downloadLink.href = `/api/download/${encodeURIComponent(file.name)}`;
+                        downloadLink.className = "download-link";
+                        downloadLink.textContent = "Download";
+                        downloadLink.setAttribute("download", ""); // This ensures it triggers a download
+
+                        div.appendChild(nameSpan);
+                        div.appendChild(downloadLink);
+                        fileList.appendChild(div);
+                    });
+                } catch (error) {
+                    console.error("Error loading files:", error);
+                    const fileList = document.getElementById("fileList");
+                    fileList.innerHTML =
+                        '<p class="error">Error loading files. Please try again later.</p>';
+                }
+            }
+
+            // Handle file upload
+            document
+                .getElementById("uploadForm")
+                .addEventListener("submit", async (e) => {
+                    e.preventDefault();
+                    const fileInput = document.getElementById("fileInput");
+                    const statusDiv = document.getElementById("uploadStatus");
+
+                    if (!fileInput.files[0]) {
+                        statusDiv.className = "error";
+                        statusDiv.textContent =
+                            "Please select a file to upload.";
+                        return;
+                    }
+
+                    const formData = new FormData();
+                    formData.append("file", fileInput.files[0]);
+
+                    try {
+                        statusDiv.textContent = "Uploading...";
+                        const response = await fetch("/api/upload", {
+                            method: "POST",
+                            body: formData,
+                        });
+
+                        if (response.ok) {
+                            statusDiv.className = "success";
+                            statusDiv.textContent =
+                                "File uploaded successfully!";
+                            fileInput.value = "";
+                            loadFiles(); // Refresh the file list
+                        } else {
+                            const errorText = await response.text();
+                            statusDiv.className = "error";
+                            statusDiv.textContent = `Upload failed: ${errorText}`;
+                        }
+                    } catch (error) {
+                        console.error("Upload error:", error);
+                        statusDiv.className = "error";
+                        statusDiv.textContent = "Upload failed: Network error";
+                    }
+                });
+
+            // Load files when the page loads
+            document.addEventListener("DOMContentLoaded", loadFiles);
+        </script>
+    </body>
+</html>
