@@ -1,6 +1,6 @@
 server/envd.sh
 merge.sh
-
+save.sh
 ./cli-transfer//target
 ./flutter-transfer//android/app/debug
 ./flutter-transfer//android/app/profile
