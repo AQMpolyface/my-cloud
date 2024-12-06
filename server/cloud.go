@@ -62,7 +62,6 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse multipart form with 10MB max memory
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
 		fmt.Println("error parsing file", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -86,7 +85,6 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer dst.Close()
 
-	// Copy file contents
 	if _, err := io.Copy(dst, file); err != nil {
 		fmt.Println("error copying:", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -115,7 +113,6 @@ func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract filename from path
 	filename := strings.TrimPrefix(r.URL.Path, "/api/download/")
 	if filename == "" {
 		http.Error(w, "No filename specified", http.StatusBadRequest)
@@ -127,17 +124,14 @@ func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		log.Fatalf("Failed to determine absolute path for uploads directory: %v", err)
 	}
 
-	// Clean the filename to prevent directory traversal
 	filename = filepath.Clean(filename)
 	filePath := filepath.Join(uploadDir, filename)
 
-	// Ensure the file is within the uploads directory
 	if !strings.HasPrefix(filePath, uploadDir) {
 		http.Error(w, "Invalid file path", http.StatusBadRequest)
 		return
 	}
 
-	// Check if file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		fmt.Println("file not found:", filePath)
 		http.Error(w, "File not found", http.StatusNotFound)
@@ -193,12 +187,57 @@ func CheckUuid(db *sql.DB, uuid string) (bool, error) {
 		return false, err
 	}
 
-	// If count is greater than 0, the UUID exists so true is retuwurned
 	return count > 0, nil
 }
 
 func IndexHandler(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "index.html")
+}
+
+func DeleteHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	db, err := database.ConnectToDB()
+	if err != nil {
+		http.Error(w, "somthing went wrong when fetching files", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+	if !CheckAuth(w, r, db) {
+		http.Error(w, "you arent authorized bozo", http.StatusUnauthorized)
+		return
+	}
+	filename := strings.TrimPrefix(r.URL.Path, "/api/delete/")
+	if filename == "" {
+		http.Error(w, "No filename specified", http.StatusBadRequest)
+		return
+	}
+
+	uploadDir, err := filepath.Abs("uploads")
+	if err != nil {
+		log.Fatalf("Failed to determine absolute path for uploads directory: %v", err)
+	}
+
+	filename = filepath.Clean(filename)
+	filePath := filepath.Join(uploadDir, filename)
+
+	if !strings.HasPrefix(filePath, uploadDir) {
+		http.Error(w, "Invalid file path", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		fmt.Println("file not found:", filePath)
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+	err = os.Remove(filePath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("error: %s", err), http.StatusInternalServerError)
+		return
+	}
 }
 func main() {
 	if err := Initialize(); err != nil {
@@ -207,6 +246,7 @@ func main() {
 
 	http.HandleFunc("/api/upload", UploadHandler)
 	http.HandleFunc("/api/download/", DownloadHandler)
+	http.HandleFunc("/api/delete/", DeleteHandler)
 	http.HandleFunc("/api/files", ListFilesHandler)
 	http.HandleFunc("/", IndexHandler)
 
